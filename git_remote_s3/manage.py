@@ -19,13 +19,18 @@ import datetime
 
 
 class Doctor:
-    def __init__(self, profile, bucket, prefix, delete_bundle, lock_ttl_seconds=60, delete_stale_locks=False) -> None:
+    def __init__(self, profile, bucket, prefix, delete_bundle, lock_ttl_seconds=60, delete_stale_locks=False, uri_scheme=None) -> None:
         self.bucket = bucket
         self.prefix = prefix
         self.delete_bundle = delete_bundle
-        self.s3 = boto3.Session(profile_name=profile).client("s3")
         self.lock_ttl_seconds = lock_ttl_seconds
         self.delete_stale_locks = delete_stale_locks
+        from .enums import UriScheme
+        if uri_scheme == UriScheme.GCS:
+            from .gcs import GCSClient
+            self.s3 = GCSClient()
+        else:
+            self.s3 = boto3.Session(profile_name=profile).client("s3")
 
     def run(self):
         repos = self.analyze_repo()
@@ -188,10 +193,15 @@ class Doctor:
 
 
 class ManageBranch:
-    def __init__(self, profile, bucket, prefix, branch) -> None:
+    def __init__(self, profile, bucket, prefix, branch, uri_scheme=None) -> None:
         self.bucket = bucket
         self.prefix = prefix
-        self.s3 = boto3.Session(profile_name=profile).client("s3")
+        from .enums import UriScheme
+        if uri_scheme == UriScheme.GCS:
+            from .gcs import GCSClient
+            self.s3 = GCSClient()
+        else:
+            self.s3 = boto3.Session(profile_name=profile).client("s3")
         self.branch = branch
         if not self.get_branch_content():
             raise ValueError(f"Branch {self.branch} does not exist")
@@ -283,6 +293,7 @@ def main():
                 args.delete_bundle,
                 args.lock_ttl,
                 args.delete_stale_locks,
+                uri_scheme=uri_scheme,
             )
             doctor.run()
         if (
@@ -295,7 +306,7 @@ def main():
                 sys.stderr.flush()
                 sys.exit(1)
             try:
-                manage_branch = ManageBranch(profile, bucket, prefix, args.branch)
+                manage_branch = ManageBranch(profile, bucket, prefix, args.branch, uri_scheme=uri_scheme)
                 manage_branch.process_cmd(args.command)
             except ValueError as e:
                 sys.stderr.write(f"fatal: {e}\n")

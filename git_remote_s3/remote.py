@@ -70,11 +70,15 @@ class S3Remote:
         self.profile = profile
         self.bucket = bucket
         self.prefix = prefix
-        if profile:
-            self.session = boto3.Session(profile_name=profile)
+        if uri_scheme == UriScheme.GCS:
+            from .gcs import GCSClient
+            self.s3 = GCSClient()
         else:
-            self.session = boto3.Session()
-        self.s3 = self.session.client("s3")
+            if profile:
+                self.session = boto3.Session(profile_name=profile)
+            else:
+                self.session = boto3.Session()
+            self.s3 = self.session.client("s3")
         try:
             self.s3.list_objects_v2(Bucket=bucket, Prefix=prefix)
         except ClientError as e:
